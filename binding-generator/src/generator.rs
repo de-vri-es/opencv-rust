@@ -355,6 +355,7 @@ pub struct Generator {
 	clang_include_dirs: Vec<PathBuf>,
 	opencv_include_dir: PathBuf,
 	opencv_module_header_dir: PathBuf,
+	enabled_modules: Vec<SupportedModule>,
 	src_cpp_dir: PathBuf,
 	clang: ManuallyDrop<Clang>,
 }
@@ -382,7 +383,12 @@ impl Drop for Generator {
 }
 
 impl Generator {
-	pub fn new(opencv_include_dir: &Path, additional_include_dirs: &[&Path], src_cpp_dir: &Path) -> Self {
+	pub fn new(
+		opencv_include_dir: &Path,
+		enabled_modules: Vec<SupportedModule>,
+		additional_include_dirs: &[&Path],
+		src_cpp_dir: &Path,
+	) -> Self {
 		let clang_bin = clang_sys::support::Clang::find(None, &[]).expect("Can't find clang binary");
 		let mut clang_include_dirs = clang_bin.cpp_search_paths.unwrap_or_default();
 		for additional_dir in additional_include_dirs {
@@ -405,6 +411,7 @@ impl Generator {
 			clang_include_dirs,
 			opencv_include_dir: canonicalize(opencv_include_dir).expect("Can't canonicalize opencv_include_dir"),
 			opencv_module_header_dir: canonicalize(opencv_module_header_dir).expect("Can't canonicalize opencv_module_header_dir"),
+			enabled_modules,
 			src_cpp_dir: canonicalize(src_cpp_dir).expect("Can't canonicalize src_cpp_dir"),
 			clang: ManuallyDrop::new(Clang::new().expect("Can't initialize clang")),
 		}
@@ -446,6 +453,7 @@ impl Generator {
 			.clang_include_dirs
 			.iter()
 			.map(|d| format!("-isystem{}", d.to_str().expect("Incorrect system include path")).into())
+			.chain([format!("-I{}/override-headers", env!("CARGO_MANIFEST_DIR")).into()])
 			.chain([&self.opencv_include_dir, &self.src_cpp_dir].iter().flat_map(|d| {
 				let include_path = d.to_str().expect("Incorrect include path");
 				[format!("-I{include_path}").into(), format!("-F{include_path}").into()]
@@ -454,6 +462,9 @@ impl Generator {
 		args.push("-DOCVRS_PARSING_HEADERS".into());
 		args.push("-includeocvrs_common.hpp".into());
 		args.push("-std=c++17".into());
+		for module in &self.enabled_modules {
+			args.push(format!("-DHAVE_OPENCV_{}", module.opencv_name().to_uppercase()).into());
+		}
 		// allow us to use some custom clang args
 		let clang_arg = env::var_os("OPENCV_CLANG_ARGS");
 		if let Some(clang_arg) = clang_arg.as_ref().and_then(|s| s.to_str()) {

@@ -167,7 +167,12 @@ impl<'r> BindingGenerator<'r> {
 			.map(|path| path.as_path())
 			.collect::<Vec<_>>();
 
-		let gener = Generator::new(opencv_header_dir, &additional_include_dirs, &SRC_CPP_DIR);
+		let gener = Generator::new(
+			opencv_header_dir,
+			self.gen_modules.modules.clone(),
+			&additional_include_dirs,
+			&SRC_CPP_DIR,
+		);
 		if !gener.is_clang_loaded() {
 			eprintln!(
 				"=== ERROR: Unable to load libclang library, check item #8 in https://github.com/twistedfall/opencv-rust/blob/master/TROUBLESHOOTING.md"
@@ -184,6 +189,7 @@ impl<'r> BindingGenerator<'r> {
 			.into_iter()
 			.map(|p| p.to_str().expect("Can't convert additional include dir to UTF-8 string"))
 			.join(",");
+		let enabled_modules = self.gen_modules.modules.iter().map(|x| x.opencv_name()).join(",");
 		let job_server = Jobserver::build()?;
 		let start = Instant::now();
 		eprintln!("=== Generating {} modules", self.gen_modules.modules.len());
@@ -199,11 +205,13 @@ impl<'r> BindingGenerator<'r> {
 						.name(format!("gen-{module_opencv_name}"))
 						.spawn_scoped(scope, {
 							let additional_include_dirs = additional_include_dirs.as_str();
+							let enabled_modules = enabled_modules.as_str();
 							move || {
 								let module_start = Instant::now();
 								let mut bin_generator = Command::new(self.build_script_path);
 								bin_generator
 									.arg(opencv_header_dir)
+									.arg(enabled_modules)
 									.arg(&*SRC_CPP_DIR)
 									.arg(&*OUT_DIR)
 									.arg(module_opencv_name)

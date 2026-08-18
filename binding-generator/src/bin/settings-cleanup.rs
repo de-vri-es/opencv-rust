@@ -81,7 +81,7 @@ fn main() {
 		let version = opencv_header_dir
 			.opencv_find_version()
 			.expect("Can't find version in header dir");
-		let modules = opencv_header_dir
+		let modules: Vec<_> = opencv_header_dir
 			.join("opencv2")
 			.read_dir()
 			.expect("Can't read dir")
@@ -92,8 +92,9 @@ fn main() {
 				p.file_name()
 					.and_then(|f| f.to_str())
 					.and_then(SupportedModule::try_from_opencv_name)
-			});
-		let gener = Generator::new(&opencv_header_dir, &[], &src_cpp_dir);
+			})
+			.collect();
+		let gener = Generator::new(&opencv_header_dir, modules.clone(), &[], &src_cpp_dir);
 		for module in modules {
 			println!("  {}", module.opencv_name());
 			gener.pre_process(module, false, {

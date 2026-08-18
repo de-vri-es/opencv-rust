@@ -22,9 +22,17 @@ fn main() {
 		opencv_header_dir = args.next();
 	}
 	let opencv_header_dir = PathBuf::from(opencv_header_dir.expect("1st argument must be OpenCV header dir"));
-	let src_cpp_dir = PathBuf::from(args.next().expect("2nd argument must be dir with custom cpp"));
-	let out_dir = PathBuf::from(args.next().expect("3rd argument must be output dir"));
-	let module = args.next().expect("4th argument must be module name");
+	let enabled_modules = args
+		.next()
+		.expect("2nd argument must be enabled OpenCV modules")
+		.into_string()
+		.expect("2nd argument (enabled modules) contains invalid UTF-8")
+		.split(',')
+		.map(|x| SupportedModule::try_from_opencv_name(x).expect("invalid enabled OpenCV module: {x}"))
+		.collect();
+	let src_cpp_dir = PathBuf::from(args.next().expect("3rd argument must be dir with custom cpp"));
+	let out_dir = PathBuf::from(args.next().expect("4th argument must be output dir"));
+	let module = args.next().expect("5th argument must be module name");
 	let module = module
 		.to_str()
 		.and_then(SupportedModule::try_from_opencv_name)
@@ -43,7 +51,7 @@ fn main() {
 		.map(Path::new)
 		.collect::<Vec<_>>();
 	let bindings_writer = RustNativeBindingWriter::new(&src_cpp_dir, &out_dir, module, version.clone());
-	Generator::new(&opencv_header_dir, &additional_include_dirs, &src_cpp_dir).generate(
+	Generator::new(&opencv_header_dir, enabled_modules, &additional_include_dirs, &src_cpp_dir).generate(
 		module,
 		&version,
 		!opencv_binding_generator::debug::enabled(),
